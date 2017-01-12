@@ -75,7 +75,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         frame.repaint();
         game_finished = false;
         xturn = false;
-        checkFinish(0, 0);
+        checkFinish();
         xturn = true;
     }
     
@@ -92,7 +92,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         frame.setIconImage("/de/panzercraft/assets/images/Field_" + ((Math.random() >= 0.5) ? "O" : "X") + ".png");
     }
     
-    public void checkFinish(int row, int col) {
+    public void checkFinish() {
         int count = 0;
         int count_fields = fields.length * fields[0].length;
         for(Field[] fields_ : fields) {
@@ -105,25 +105,31 @@ public class TicTacToe implements ActionListener, WindowListener {
         int state = (xturn ? Field.X : Field.O);
         int state_opposite = (!xturn ? Field.X : Field.O);
         boolean draw = true;
-        if(fields[row][0].getState() == state && fields[row][1].getState() == state && fields[row][2].getState() == state) {
-            game_finished = true;
-            draw = false;
-        } else if(fields[0][col].getState() == state && fields[1][col].getState() == state && fields[2][col].getState() == state) {
-            game_finished = true;
-            draw = false;
-        } else if(fields[0][0].getState() == state && fields[1][1].getState() == state && fields[2][2].getState() == state) {
+        if(fields[0][0].getState() == state && fields[1][1].getState() == state && fields[2][2].getState() == state) {
             game_finished = true;
             draw = false;
         } else if(fields[0][2].getState() == state && fields[1][1].getState() == state && fields[2][0].getState() == state) {
             game_finished = true;
             draw = false;
         } else {
-            if(count == count_fields) {
-                if(!game_finished) {
-                    draw = true;
+            for(int row = 0; row < fields.length; row++) {
+                if(fields[row][0].getState() == state && fields[row][1].getState() == state && fields[row][2].getState() == state) {
+                    game_finished = true;
+                    draw = false;
                 }
-                game_finished = true;
             }
+            for(int col = 0; col < fields[0].length; col++) {
+                if(fields[0][col].getState() == state && fields[1][col].getState() == state && fields[2][col].getState() == state) {
+                    game_finished = true;
+                    draw = false;
+                }
+            }
+        }
+        if(count == count_fields) {
+            if(!game_finished) {
+                draw = true;
+            }
+            game_finished = true;
         }
         if(game_finished) {
             String extra = "";
@@ -164,7 +170,7 @@ public class TicTacToe implements ActionListener, WindowListener {
                             if(field.getState() == Field.CLEAR) {
                                 field.setState((xturn) ? Field.X : Field.O);
                             }
-                            checkFinish(i, z);
+                            checkFinish();
                             xturn = !xturn;
                         }
                         return;
