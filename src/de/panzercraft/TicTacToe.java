@@ -111,7 +111,7 @@ public class TicTacToe implements ActionListener, WindowListener {
     }
     
     public void undo() {
-        if(game_finished || moves.isEmpty()) {
+        if(!canUndo()) {
             return;
         }
         try {
@@ -127,7 +127,7 @@ public class TicTacToe implements ActionListener, WindowListener {
     }
     
     public void redo() {
-        if(game_finished || moves.isEmpty() || move_number >= moves.size()) {
+        if(!canRedo()) {
             return;
         }
         try {
@@ -140,6 +140,14 @@ public class TicTacToe implements ActionListener, WindowListener {
         } catch (Exception ex) {
             StaticStandard.logErr("Error while redoing a move: " + ex, ex);
         }
+    }
+    
+    public boolean canUndo() {
+        return !(game_finished || moves.isEmpty() || move_number == 0);
+    }
+    
+    public boolean canRedo() {
+        return !(game_finished || moves.isEmpty() || move_number >= moves.size());
     }
     
     public void checkFinish() {
@@ -183,6 +191,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         }
         frame.revalidate();
         frame.repaint();
+        setDo(canUndo(), canRedo());
         if(game_finished) {
             String extra = "";
             if(draw) {
@@ -200,7 +209,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         }
     }
     
-    private void doMove(int row, int col, int player) {
+    private boolean doMove(int row, int col, int player) {
         try {
             Field field = fields[row][col];
             if(field.getState() == Field.CLEAR) {
@@ -212,18 +221,28 @@ public class TicTacToe implements ActionListener, WindowListener {
                 moves.add(move);
                 StaticStandard.log(move);
                 move_number++;
+                return true;
+            } else {
+                return false;
             }
         } catch (Exception ex) {
+            return false;
         }
-        checkFinish();
     }
     
-    private void doMove(Move move, boolean invert) {
+    private boolean doMove(Move move, boolean invert) {
         try {
             Field field = fields[move.getRow()][move.getCol()];
             field.setState((invert ? Field.CLEAR : move.getPlayer()));
+            return true;
         } catch (Exception ex) {
+            return false;
         }
+    }
+    
+    private void setDo(boolean show_undo, boolean show_redo) {
+        M2I2.setEnabled(show_undo);
+        M2I3.setEnabled(show_redo);
     }
     
     public void exit() {
@@ -245,8 +264,11 @@ public class TicTacToe implements ActionListener, WindowListener {
                     Field field = fields[i][z];
                     if(e.getSource() == field) {
                         if(!game_finished) {
-                            doMove(i, z, (xturn ? Field.X : Field.O));
-                            switchPlayer();
+                            boolean valid = doMove(i, z, (xturn ? Field.X : Field.O));
+                            if(valid) {
+                                checkFinish();
+                                switchPlayer();
+                            }
                         }
                         return;
                     }
