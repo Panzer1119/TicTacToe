@@ -49,6 +49,7 @@ public class TicTacToe implements ActionListener, WindowListener {
     private boolean xturn = true;
     private int move_number = 0;
     private final ArrayList<Move> moves = new ArrayList<>();
+    private int cpu = Field.CLEAR;
     
     public TicTacToe() {
         frame.setDefaultCloseOperation(JFrameManager.DO_NOTHING_ON_CLOSE);
@@ -87,6 +88,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         frame.repaint();
         game_finished = false;
         move_number = 0;
+        cpu = Field.CLEAR;
         moves.clear();
         xturn = false;
         checkFinish();
@@ -160,8 +162,8 @@ public class TicTacToe implements ActionListener, WindowListener {
                 }
             }
         }
-        int state = (xturn ? Field.X : Field.O);
-        int state_opposite = (!xturn ? Field.X : Field.O);
+        int state = getPlayerActive();
+        int state_opposite = getPlayerInactive();
         boolean draw = true;
         if(fields[0][0].getState() == state && fields[1][1].getState() == state && fields[2][2].getState() == state) {
             game_finished = true;
@@ -252,11 +254,19 @@ public class TicTacToe implements ActionListener, WindowListener {
     public static void main(String[] args) {
         TicTacToe x = new TicTacToe();
     }
+    
+    public int getPlayerActive() {
+        return (xturn ? Field.X : Field.O);
+    }
+    
+    public int getPlayerInactive() {
+        return (!xturn ? Field.X : Field.O);
+    }
 
     @Override
     public void actionPerformed(ActionEvent e) {
         if(e.getSource() instanceof Field) {
-            if(game_finished) {
+            if(game_finished || (cpu != Field.CLEAR && cpu == getPlayerActive())) {
                 return;
             }
             for(int i = 0; i < fields.length; i++) {
@@ -264,7 +274,7 @@ public class TicTacToe implements ActionListener, WindowListener {
                     Field field = fields[i][z];
                     if(e.getSource() == field) {
                         if(!game_finished) {
-                            boolean valid = doMove(i, z, (xturn ? Field.X : Field.O));
+                            boolean valid = doMove(i, z, getPlayerActive());
                             if(valid) {
                                 checkFinish();
                                 switchPlayer();
