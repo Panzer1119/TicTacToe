@@ -6,6 +6,7 @@
 package de.panzercraft;
 
 import de.panzercraft.objects.Field;
+import de.panzercraft.objects.Move;
 import jaddon.controller.JFrameManager;
 import jaddon.controller.StaticStandard;
 import jaddon.utils.JUtils;
@@ -15,6 +16,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
+import java.util.ArrayList;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -38,11 +40,15 @@ public class TicTacToe implements ActionListener, WindowListener {
     private final JMenuItem M1I1 = new JMenuItem("Exit");
     private final JMenuItem M1I2 = new JMenuItem("Restart");
     private final JMenuItem M2I1 = new JMenuItem("Reset");
+    private final JMenuItem M2I2 = new JMenuItem("Undo");
+    private final JMenuItem M2I3 = new JMenuItem("Redo");
     
     private final Field[][] fields = new Field[3][3];
     private int id_turn = -1;
     private boolean game_finished = false;
     private boolean xturn = true;
+    private int move_number = 0;
+    private final ArrayList<Move> moves = new ArrayList<>();
     
     public TicTacToe() {
         frame.setDefaultCloseOperation(JFrameManager.DO_NOTHING_ON_CLOSE);
@@ -53,9 +59,15 @@ public class TicTacToe implements ActionListener, WindowListener {
         M1I1.addActionListener(this);
         M1I2.addActionListener(this);
         M2I1.addActionListener(this);
-        M2I1.setAccelerator(KeyStroke.getKeyStroke("ctrl R"));
+        M2I2.addActionListener(this);
+        M2I3.addActionListener(this);
+        M2I1.setAccelerator(KeyStroke.getKeyStroke("ctrl N"));
+        M2I2.setAccelerator(KeyStroke.getKeyStroke("ctrl R"));
+        M2I3.setAccelerator(KeyStroke.getKeyStroke("ctrl Y"));
         M1.add(M1I2);
         M1.add(M1I1);
+        M2.add(M2I2);
+        M2.add(M2I3);
         M2.add(M2I1);
         MB1.add(M1);
         MB1.add(M2);
@@ -74,6 +86,8 @@ public class TicTacToe implements ActionListener, WindowListener {
         frame.revalidate();
         frame.repaint();
         game_finished = false;
+        move_number = 0;
+        moves.clear();
         xturn = false;
         checkFinish();
         xturn = true;
@@ -90,6 +104,42 @@ public class TicTacToe implements ActionListener, WindowListener {
         }
         reset();
         frame.setIconImage("/de/panzercraft/assets/images/Field_" + ((Math.random() >= 0.5) ? "O" : "X") + ".png");
+    }
+    
+    private void switchPlayer() {
+        xturn = !xturn;
+    }
+    
+    public void undo() {
+        if(game_finished || moves.isEmpty()) {
+            return;
+        }
+        try {
+            move_number--;
+            Move move = moves.get(move_number);
+            doMove(move, true);
+            StaticStandard.log("Undid: \"" + move + "\"");
+            checkFinish();
+            switchPlayer();
+        } catch (Exception ex) {
+            StaticStandard.logErr("Error while undoing a move: " + ex, ex);
+        }
+    }
+    
+    public void redo() {
+        if(game_finished || moves.isEmpty() || move_number >= moves.size()) {
+            return;
+        }
+        try {
+            Move move = moves.get(move_number);
+            move_number++;
+            doMove(move, false);
+            StaticStandard.log("Redid: \"" + move + "\"");
+            checkFinish();
+            switchPlayer();
+        } catch (Exception ex) {
+            StaticStandard.logErr("Error while redoing a move: " + ex, ex);
+        }
     }
     
     public void checkFinish() {
@@ -131,6 +181,8 @@ public class TicTacToe implements ActionListener, WindowListener {
             }
             game_finished = true;
         }
+        frame.revalidate();
+        frame.repaint();
         if(game_finished) {
             String extra = "";
             if(draw) {
@@ -145,6 +197,32 @@ public class TicTacToe implements ActionListener, WindowListener {
         } else {
             frame.delWork(id_turn);
             id_turn = frame.addWork(Field.getPlayer(state_opposite) + "'s turn", false);
+        }
+    }
+    
+    private void doMove(int row, int col, int player) {
+        try {
+            Field field = fields[row][col];
+            if(field.getState() == Field.CLEAR) {
+                field.setState(player);
+                Move move = new Move(row, col, player, move_number);
+                while(move_number < moves.size()) {
+                    moves.remove(move_number);
+                }
+                moves.add(move);
+                StaticStandard.log(move);
+                move_number++;
+            }
+        } catch (Exception ex) {
+        }
+        checkFinish();
+    }
+    
+    private void doMove(Move move, boolean invert) {
+        try {
+            Field field = fields[move.getRow()][move.getCol()];
+            field.setState((invert ? Field.CLEAR : move.getPlayer()));
+        } catch (Exception ex) {
         }
     }
     
@@ -167,11 +245,8 @@ public class TicTacToe implements ActionListener, WindowListener {
                     Field field = fields[i][z];
                     if(e.getSource() == field) {
                         if(!game_finished) {
-                            if(field.getState() == Field.CLEAR) {
-                                field.setState((xturn) ? Field.X : Field.O);
-                            }
-                            checkFinish();
-                            xturn = !xturn;
+                            doMove(i, z, (xturn ? Field.X : Field.O));
+                            switchPlayer();
                         }
                         return;
                     }
@@ -184,6 +259,10 @@ public class TicTacToe implements ActionListener, WindowListener {
                 JUtils.restart();
             } else if(e.getSource() == M2I1) {
                 reset();
+            } else if(e.getSource() == M2I2) {
+                undo();
+            } else if(e.getSource() == M2I3) {
+                redo();
             }
         }
     }
