@@ -26,11 +26,11 @@ import javax.swing.KeyStroke;
 /**
  * This TicTacToe game was programmed in only 1 hour
  * @author Paul Hagedorn
- * @version 11.01.2017
+ * @version 12.01.2017
  */
 public class TicTacToe implements ActionListener, WindowListener {
     
-    public static final String VERSION = "11.01.2017";
+    public static final String VERSION = "12.01.2017";
     public static final String PROGRAMNAME = "TicTacToe";
     
     private final JFrameManager frame = new JFrameManager(PROGRAMNAME, VERSION);
