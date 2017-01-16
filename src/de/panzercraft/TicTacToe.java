@@ -46,6 +46,10 @@ public class TicTacToe implements ActionListener, WindowListener {
     
     public static final int STANDARDPORT = 4533;
     
+    public static final int NONE = -1;
+    public static final int HOST = 0;
+    public static final int SLAVE = 1;
+    
     private final TicTacToe tictactoe = this;
     
     private final JFrameManager frame = new JFrameManager(PROGRAMNAME, VERSION);
@@ -67,8 +71,10 @@ public class TicTacToe implements ActionListener, WindowListener {
     private int move_number = 0;
     private final ArrayList<Move> moves = new ArrayList<>();
     private int cpu = Field.CLEAR;
+    private int multiplayer_state = NONE;
     
     private Server server = new Server(STANDARDPORT);
+    private Client client_logged_in = null;
     private Client client = null;
     
     public TicTacToe() {
@@ -114,6 +120,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         try {
             server.stop();
             cpu = Field.CLEAR;
+            client_logged_in = null;
         } catch (Exception ex) {
         }
     }
@@ -122,6 +129,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         try {
             client = new Client(InetAddress.getByName(host), STANDARDPORT);
             client.setInputProcessor(INPUTPROCESSORCLIENT);
+            client.setReconnectAfterConnectionLoss(false);
             client.startWThread().join();
         } catch (Exception ex) {
         }
@@ -136,43 +144,112 @@ public class TicTacToe implements ActionListener, WindowListener {
         }
     }
     
-    private void host() {
-        cpu = Field.CLEAR;
-        startServer();
-        final JWaitingDialog wd = new JWaitingDialog(null, "Waiting for players", "Host");
+    private void stopMultiplayer() {
+        stopServer();
+        stopClient();
+    }
+    
+    private void hostWThread() {
         Runnable run = new Runnable() {
           
             @Override
             public void run() {
-                while(cpu == Field.CLEAR && wd.isRunning()) {
-                    try {
-                        Thread.sleep(10);
-                    } catch (Exception ex) {
-                    }
-                }
-                if(wd.isRunning()) {
-                    wd.close();
-                }
+                host();
             }
             
         };
         StaticStandard.execute(run);
+    }
+    
+    private void host() {
+        reset();
+        multiplayer_state = HOST;
+        cpu = Field.CLEAR;
+        final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for player", "Host");
+        Runnable run = new Runnable() {
+          
+            @Override
+            public void run() {
+                boolean wdstarted = false;
+                while(cpu == Field.CLEAR && ((wdstarted) ? wd.isRunning() : true)) {
+                    if(wd.isRunning()) {
+                        wdstarted = true;
+                    }
+                    try {
+                        Thread.sleep(100);
+                    } catch (Exception ex) {
+                    }
+                }
+                wd.close();
+            }
+            
+        };
+        StaticStandard.execute(run);
+        startServer();
         int result = wd.showWaitingDialog();
         if(result != JWaitingDialog.STOPPED_OPTION) {
+            multiplayer_state = NONE;
             stopServer();
         } else {
             StaticStandard.log("Found player");
         }
     }
     
+    private void joinWThread() {
+        Runnable run = new Runnable() {
+          
+            @Override
+            public void run() {
+                join();
+            }
+            
+        };
+        StaticStandard.execute(run);
+    }
+    
     private void join() {
+        reset();
+        multiplayer_state = SLAVE;
+        cpu = Field.CLEAR;
         String host = JOptionPane.showInputDialog(frame, "IP", "Join", JOptionPane.QUESTION_MESSAGE);
         if(host != null && !host.isEmpty()) {
+            final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for server", "Join");
+            Runnable run = new Runnable() {
+
+                @Override
+                public void run() {
+                    boolean wdstarted = false;
+                    while(cpu == Field.CLEAR && ((wdstarted) ? wd.isRunning() : true)) {
+                        if(wd.isRunning()) {
+                            wdstarted = true;
+                        }
+                        try {
+                            Thread.sleep(100);
+                        } catch (Exception ex) {
+                        }
+                    }
+                    wd.close();
+                }
+
+            };
+            StaticStandard.execute(run);
             startClient(host);
+            int result = wd.showWaitingDialog();
+            if(result != JWaitingDialog.STOPPED_OPTION) {
+                multiplayer_state = NONE;
+                stopClient();
+            } else {
+                StaticStandard.log("Found server");
+            }
         }
     }
     
     public void reset() {
+        stopMultiplayer();
+        resetGame();
+    }
+    
+    public void resetGame() {
         for(Field[] fields_ : fields) {
             for(Field field : fields_) {
                 field.reset();
@@ -199,8 +276,12 @@ public class TicTacToe implements ActionListener, WindowListener {
                 frame.add(field);
             }
         }
+        setIconImage(((Math.random() >= 0.5) ? Field.O : Field.X));
         reset();
-        frame.setIconImage("/de/panzercraft/assets/images/Field_" + ((Math.random() >= 0.5) ? "O" : "X") + ".png");
+    }
+    
+    private void setIconImage(int player) {
+        frame.setIconImage("/de/panzercraft/assets/images/Field_" + Field.getPlayer(player) + ".png");
     }
     
     private void switchPlayer() {
@@ -300,6 +381,7 @@ public class TicTacToe implements ActionListener, WindowListener {
             frame.delWork(id_turn);
             id_turn = frame.addWork(complete, false);
             JOptionPane.showMessageDialog(frame, complete);
+            stopMultiplayer();
         } else {
             frame.delWork(id_turn);
             id_turn = frame.addWork(Field.getPlayer(state_opposite) + "'s turn", false);
@@ -318,6 +400,13 @@ public class TicTacToe implements ActionListener, WindowListener {
                 moves.add(move);
                 StaticStandard.log(move);
                 move_number++;
+                if(multiplayer_state != NONE && cpu != player) {
+                    if(multiplayer_state == HOST) {
+                        client_logged_in.send(move);
+                    } else if(multiplayer_state == SLAVE) {
+                        client.send(move);
+                    }
+                }
                 return true;
             } else {
                 return false;
@@ -404,9 +493,9 @@ public class TicTacToe implements ActionListener, WindowListener {
             } else if(e.getSource() == M2I3) {
                 redo();
             } else if(e.getSource() == M2I4) {
-                host();
+                hostWThread();
             } else if(e.getSource() == M2I5) {
-                join();
+                joinWThread();
             }
         }
     }
@@ -452,17 +541,28 @@ public class TicTacToe implements ActionListener, WindowListener {
             StaticStandard.log(String.format("[SERVER] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
             if(object instanceof Move) {
                 Move move = (Move) object;
-                tictactoe.doMove(move.row, move.col, move.player);
+                if(!game_finished) {
+                    boolean valid = tictactoe.doMove(move.row, move.col, move.player);
+                    if(valid) {
+                        checkFinish();
+                        switchPlayer();
+                    }
+                }
             } else if(object instanceof Message) {
                 Message message = (Message) object;
                 cpu = message.slave;
-                xturn = (message.host == Field.X);
+                StaticStandard.logErr("Setted CPU: " + cpu);
+                setIconImage(message.host);
+                xturn = false;
+                checkFinish();
+                xturn = true;
             }
         }
 
         @Override
         public void clientLoggedIn(Client client, Instant timestamp) {
             StaticStandard.log(String.format("[SERVER] [%s]: Client \"%s\" logged in", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), client.getInetaddress().getHostAddress()));
+            client_logged_in = client;
             client.send(rollOut());
         }
 
@@ -476,22 +576,32 @@ public class TicTacToe implements ActionListener, WindowListener {
     public final InputProcessor INPUTPROCESSORCLIENT = new InputProcessor() {
         
         @Override
-        public void processInput(Object object, Instant timestamp) {
-            processInput(object, null, timestamp);
+        public void processInput(Object object, Instant timestamp) {            
+            if(object instanceof Move) {
+                Move move = (Move) object;
+                if(!game_finished) {
+                    boolean valid = tictactoe.doMove(move.row, move.col, move.player);
+                    if(valid) {
+                        checkFinish();
+                        switchPlayer();
+                    }
+                }
+            } else if(object instanceof Message) {
+                Message message = (Message) object;
+                cpu = message.host;
+                StaticStandard.logErr("Setted CPU: " + cpu);
+                setIconImage(message.slave);
+                xturn = false;
+                client.send(message);
+                checkFinish();
+                xturn = true;
+            }
+            StaticStandard.log(String.format("[CLIENT] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
         }
 
         @Override
         public void processInput(Object object, Client client, Instant timestamp) {
-            StaticStandard.log(String.format("[CLIENT] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
-            if(object instanceof Move) {
-                Move move = (Move) object;
-                tictactoe.doMove(move.row, move.col, move.player);
-            } else if(object instanceof Message) {
-                Message message = (Message) object;
-                cpu = message.host;
-                xturn = (message.slave == Field.X);
-                client.send(message);
-            }
+            StaticStandard.log(String.format("[CLIENT] [%s] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), ((client != null) ? client.getInetaddress().getHostAddress() : ""), object));
         }
 
         @Override
