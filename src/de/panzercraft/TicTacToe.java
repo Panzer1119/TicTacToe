@@ -33,6 +33,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JSeparator;
 import javax.swing.KeyStroke;
+import javax.swing.Timer;
 
 /**
  * This TicTacToe game was programmed in only 1 hour
@@ -63,6 +64,7 @@ public class TicTacToe implements ActionListener, WindowListener {
     private final JMenuItem M2I3 = new JMenuItem("Redo");
     private final JMenuItem M2I4 = new JMenuItem("Host");
     private final JMenuItem M2I5 = new JMenuItem("Join");
+    private final JMenuItem M2I6 = new JMenuItem("Rejoin");
     
     private final Field[][] fields = new Field[3][3];
     private int id_turn = -1;
@@ -72,6 +74,8 @@ public class TicTacToe implements ActionListener, WindowListener {
     private final ArrayList<Move> moves = new ArrayList<>();
     private int cpu = Field.CLEAR;
     private int multiplayer_state = NONE;
+    private final Timer timer = new Timer(100, this);
+    private String last_host = null;
     
     private Server server = new Server(STANDARDPORT);
     private Client client_logged_in = null;
@@ -90,6 +94,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         M2I3.addActionListener(this);
         M2I4.addActionListener(this);
         M2I5.addActionListener(this);
+        M2I6.addActionListener(this);
         M2I1.setAccelerator(KeyStroke.getKeyStroke("ctrl N"));
         M2I2.setAccelerator(KeyStroke.getKeyStroke("ctrl R"));
         M2I3.setAccelerator(KeyStroke.getKeyStroke("ctrl Y"));
@@ -101,11 +106,13 @@ public class TicTacToe implements ActionListener, WindowListener {
         M2.add(new JSeparator());
         M2.add(M2I4);
         M2.add(M2I5);
+        M2.add(M2I6);
         MB1.add(M1);
         MB1.add(M2);
         frame.setJMenuBar(MB1);
         frame.pack();
         frame.setLocationRelativeTo(null);
+        timer.start();
         frame.setVisible(true);
     }
     
@@ -121,6 +128,9 @@ public class TicTacToe implements ActionListener, WindowListener {
             server.stop();
             cpu = Field.CLEAR;
             client_logged_in = null;
+            if(multiplayer_state == HOST) {
+                multiplayer_state = NONE;
+            }
         } catch (Exception ex) {
         }
     }
@@ -129,7 +139,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         try {
             client = new Client(InetAddress.getByName(host), STANDARDPORT);
             client.setInputProcessor(INPUTPROCESSORCLIENT);
-            client.setReconnectAfterConnectionLoss(false);
+            client.setReconnectAfterConnectionLoss(true);
             client.startWThread().join();
         } catch (Exception ex) {
         }
@@ -140,6 +150,9 @@ public class TicTacToe implements ActionListener, WindowListener {
             client.stop();
             client = null;
             cpu = Field.CLEAR;
+            if(multiplayer_state == SLAVE) {
+                multiplayer_state = NONE;
+            }
         } catch (Exception ex) {
         }
     }
@@ -147,6 +160,7 @@ public class TicTacToe implements ActionListener, WindowListener {
     private void stopMultiplayer() {
         stopServer();
         stopClient();
+        multiplayer_state = NONE;
     }
     
     private void hostWThread() {
@@ -207,11 +221,27 @@ public class TicTacToe implements ActionListener, WindowListener {
         StaticStandard.execute(run);
     }
     
+    private void joinWThread(String host) {
+        Runnable run = new Runnable() {
+          
+            @Override
+            public void run() {
+                join(host);
+            }
+            
+        };
+        StaticStandard.execute(run);
+    }
+    
     private void join() {
+        String host = JOptionPane.showInputDialog(frame, "IP", "Join", JOptionPane.QUESTION_MESSAGE);
+        join(host);
+    }
+    
+    private void join(String host) {
         reset();
         multiplayer_state = SLAVE;
         cpu = Field.CLEAR;
-        String host = JOptionPane.showInputDialog(frame, "IP", "Join", JOptionPane.QUESTION_MESSAGE);
         if(host != null && !host.isEmpty()) {
             final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for server", "Join");
             Runnable run = new Runnable() {
@@ -239,6 +269,7 @@ public class TicTacToe implements ActionListener, WindowListener {
                 multiplayer_state = NONE;
                 stopClient();
             } else {
+                last_host = host;
                 StaticStandard.log("Found server");
             }
         }
@@ -321,11 +352,11 @@ public class TicTacToe implements ActionListener, WindowListener {
     }
     
     public boolean canUndo() {
-        return !(game_finished || moves.isEmpty() || move_number == 0);
+        return !(game_finished || moves.isEmpty() || move_number == 0) && (multiplayer_state == NONE);
     }
     
     public boolean canRedo() {
-        return !(game_finished || moves.isEmpty() || move_number >= moves.size());
+        return !(game_finished || moves.isEmpty() || move_number >= moves.size()) && (multiplayer_state == NONE);
     }
     
     public void checkFinish() {
@@ -369,7 +400,6 @@ public class TicTacToe implements ActionListener, WindowListener {
         }
         frame.revalidate();
         frame.repaint();
-        setDo(canUndo(), canRedo());
         if(game_finished) {
             String extra = "";
             if(draw) {
@@ -459,6 +489,12 @@ public class TicTacToe implements ActionListener, WindowListener {
     public int getPlayerInactive() {
         return (!xturn ? Field.X : Field.O);
     }
+    
+    private void checkMultiplayer() {
+        M2I4.setEnabled(multiplayer_state == NONE);
+        M2I5.setEnabled(multiplayer_state == NONE);
+        M2I6.setEnabled((multiplayer_state == NONE) && (last_host != null && !last_host.isEmpty()));
+    }
 
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -496,6 +532,13 @@ public class TicTacToe implements ActionListener, WindowListener {
                 hostWThread();
             } else if(e.getSource() == M2I5) {
                 joinWThread();
+            } else if(e.getSource() == timer) {
+                checkMultiplayer();
+                setDo(canUndo(), canRedo());
+            } else if(e.getSource() == M2I6) {
+                if(last_host != null && !last_host.isEmpty()) {
+                    joinWThread(last_host);
+                }
             }
         }
     }
