@@ -6,9 +6,14 @@
 package de.panzercraft;
 
 import de.panzercraft.objects.Field;
+import de.panzercraft.objects.Message;
 import de.panzercraft.objects.Move;
 import jaddon.controller.JFrameManager;
 import jaddon.controller.StaticStandard;
+import jaddon.dialog.JWaitingDialog;
+import jaddon.net.Client;
+import jaddon.net.InputProcessor;
+import jaddon.net.Server;
 import jaddon.utils.JUtils;
 import java.awt.Dimension;
 import java.awt.GridLayout;
@@ -16,11 +21,17 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
+import java.net.InetAddress;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
+import javax.swing.JSeparator;
 import javax.swing.KeyStroke;
 
 /**
@@ -33,6 +44,10 @@ public class TicTacToe implements ActionListener, WindowListener {
     public static final String VERSION = "12.01.2017";
     public static final String PROGRAMNAME = "TicTacToe";
     
+    public static final int STANDARDPORT = 4533;
+    
+    private final TicTacToe tictactoe = this;
+    
     private final JFrameManager frame = new JFrameManager(PROGRAMNAME, VERSION);
     private final JMenuBar MB1 = new JMenuBar();
     private final JMenu M1 = new JMenu("File");
@@ -42,6 +57,8 @@ public class TicTacToe implements ActionListener, WindowListener {
     private final JMenuItem M2I1 = new JMenuItem("Reset");
     private final JMenuItem M2I2 = new JMenuItem("Undo");
     private final JMenuItem M2I3 = new JMenuItem("Redo");
+    private final JMenuItem M2I4 = new JMenuItem("Host");
+    private final JMenuItem M2I5 = new JMenuItem("Join");
     
     private final Field[][] fields = new Field[3][3];
     private int id_turn = -1;
@@ -50,6 +67,9 @@ public class TicTacToe implements ActionListener, WindowListener {
     private int move_number = 0;
     private final ArrayList<Move> moves = new ArrayList<>();
     private int cpu = Field.CLEAR;
+    
+    private Server server = new Server(STANDARDPORT);
+    private Client client = null;
     
     public TicTacToe() {
         frame.setDefaultCloseOperation(JFrameManager.DO_NOTHING_ON_CLOSE);
@@ -62,6 +82,8 @@ public class TicTacToe implements ActionListener, WindowListener {
         M2I1.addActionListener(this);
         M2I2.addActionListener(this);
         M2I3.addActionListener(this);
+        M2I4.addActionListener(this);
+        M2I5.addActionListener(this);
         M2I1.setAccelerator(KeyStroke.getKeyStroke("ctrl N"));
         M2I2.setAccelerator(KeyStroke.getKeyStroke("ctrl R"));
         M2I3.setAccelerator(KeyStroke.getKeyStroke("ctrl Y"));
@@ -70,12 +92,84 @@ public class TicTacToe implements ActionListener, WindowListener {
         M2.add(M2I2);
         M2.add(M2I3);
         M2.add(M2I1);
+        M2.add(new JSeparator());
+        M2.add(M2I4);
+        M2.add(M2I5);
         MB1.add(M1);
         MB1.add(M2);
         frame.setJMenuBar(MB1);
         frame.pack();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+    }
+    
+    private void startServer() {
+        try {
+            server.startWThread().join();
+        } catch (Exception ex) {
+        }
+    }
+    
+    private void stopServer() {
+        try {
+            server.stop();
+            cpu = Field.CLEAR;
+        } catch (Exception ex) {
+        }
+    }
+    
+    private void startClient(String host) {
+        try {
+            client = new Client(InetAddress.getByName(host), STANDARDPORT);
+            client.setInputProcessor(INPUTPROCESSORCLIENT);
+            client.startWThread().join();
+        } catch (Exception ex) {
+        }
+    }
+    
+    private void stopClient() {
+        try {
+            client.stop();
+            client = null;
+            cpu = Field.CLEAR;
+        } catch (Exception ex) {
+        }
+    }
+    
+    private void host() {
+        cpu = Field.CLEAR;
+        startServer();
+        final JWaitingDialog wd = new JWaitingDialog(null, "Waiting for players", "Host");
+        Runnable run = new Runnable() {
+          
+            @Override
+            public void run() {
+                while(cpu == Field.CLEAR && wd.isRunning()) {
+                    try {
+                        Thread.sleep(10);
+                    } catch (Exception ex) {
+                    }
+                }
+                if(wd.isRunning()) {
+                    wd.close();
+                }
+            }
+            
+        };
+        StaticStandard.execute(run);
+        int result = wd.showWaitingDialog();
+        if(result != JWaitingDialog.STOPPED_OPTION) {
+            stopServer();
+        } else {
+            StaticStandard.log("Found player");
+        }
+    }
+    
+    private void join() {
+        String host = JOptionPane.showInputDialog(frame, "IP", "Join", JOptionPane.QUESTION_MESSAGE);
+        if(host != null && !host.isEmpty()) {
+            startClient(host);
+        }
     }
     
     public void reset() {
@@ -96,6 +190,7 @@ public class TicTacToe implements ActionListener, WindowListener {
     }
     
     public void init() {
+        server.setInputProcessor(INPUTPROCESSORSERVER);
         for(int i = 0; i < fields.length; i++) {
             for(int z = 0; z < fields[i].length; z++) {
                 Field field = new Field();
@@ -242,6 +337,19 @@ public class TicTacToe implements ActionListener, WindowListener {
         }
     }
     
+    private Message rollOut() {
+        Message message = new Message();
+        boolean isHostX = Math.random() >= 0.5;
+        if(isHostX) {
+            message.host = Field.X;
+            message.slave = Field.O;
+        } else {
+            message.host = Field.X;
+            message.slave = Field.O;
+        }
+        return message;
+    }
+    
     private void setDo(boolean show_undo, boolean show_redo) {
         M2I2.setEnabled(show_undo);
         M2I3.setEnabled(show_redo);
@@ -295,6 +403,10 @@ public class TicTacToe implements ActionListener, WindowListener {
                 undo();
             } else if(e.getSource() == M2I3) {
                 redo();
+            } else if(e.getSource() == M2I4) {
+                host();
+            } else if(e.getSource() == M2I5) {
+                join();
             }
         }
     }
@@ -327,5 +439,71 @@ public class TicTacToe implements ActionListener, WindowListener {
     @Override
     public void windowDeactivated(WindowEvent e) {
     }
+    
+    public final InputProcessor INPUTPROCESSORSERVER = new InputProcessor() {
+        
+        @Override
+        public void processInput(Object object, Instant timestamp) {
+            this.processInput(object, null, timestamp);
+        }
+
+        @Override
+        public void processInput(Object object, Client client, Instant timestamp) {
+            StaticStandard.log(String.format("[SERVER] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
+            if(object instanceof Move) {
+                Move move = (Move) object;
+                tictactoe.doMove(move.row, move.col, move.player);
+            } else if(object instanceof Message) {
+                Message message = (Message) object;
+                cpu = message.slave;
+                xturn = (message.host == Field.X);
+            }
+        }
+
+        @Override
+        public void clientLoggedIn(Client client, Instant timestamp) {
+            StaticStandard.log(String.format("[SERVER] [%s]: Client \"%s\" logged in", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), client.getInetaddress().getHostAddress()));
+            client.send(rollOut());
+        }
+
+        @Override
+        public void clientLoggedOut(Client client, Instant timestamp) {
+            StaticStandard.log(String.format("[SERVER] [%s]: Client \"%s\" logged out", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), client.getInetaddress().getHostAddress()));
+        }
+        
+    };
+    
+    public final InputProcessor INPUTPROCESSORCLIENT = new InputProcessor() {
+        
+        @Override
+        public void processInput(Object object, Instant timestamp) {
+            processInput(object, null, timestamp);
+        }
+
+        @Override
+        public void processInput(Object object, Client client, Instant timestamp) {
+            StaticStandard.log(String.format("[CLIENT] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
+            if(object instanceof Move) {
+                Move move = (Move) object;
+                tictactoe.doMove(move.row, move.col, move.player);
+            } else if(object instanceof Message) {
+                Message message = (Message) object;
+                cpu = message.host;
+                xturn = (message.slave == Field.X);
+                client.send(message);
+            }
+        }
+
+        @Override
+        public void clientLoggedIn(Client client, Instant timestamp) {
+            StaticStandard.log(String.format("[CLIENT] [%s]: Client \"%s\" logged in", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), client.getInetaddress().getHostAddress()));
+        }
+
+        @Override
+        public void clientLoggedOut(Client client, Instant timestamp) {
+            StaticStandard.log(String.format("[CLIENT] [%s]: Client \"%s\" logged out", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), client.getInetaddress().getHostAddress()));
+        }
+        
+    };
     
 }

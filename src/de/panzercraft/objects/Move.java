@@ -5,11 +5,13 @@
  */
 package de.panzercraft.objects;
 
+import java.io.Serializable;
+
 /**
  *
  * @author Paul
  */
-public class Move {
+public class Move implements Serializable {
     
     public final int row;
     public final int col;
