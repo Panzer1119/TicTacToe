@@ -234,7 +234,7 @@ public class TicTacToe implements ActionListener, WindowListener {
     }
     
     private void join() {
-        String host = JOptionPane.showInputDialog(frame, "IP", "Join", JOptionPane.QUESTION_MESSAGE);
+        String host = JOptionPane.showInputDialog(frame, "IP:", "Join", JOptionPane.QUESTION_MESSAGE);
         join(host);
     }
     
