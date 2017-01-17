@@ -11,6 +11,7 @@ import de.panzercraft.objects.Move;
 import jaddon.controller.JFrameManager;
 import jaddon.controller.StaticStandard;
 import jaddon.dialog.JWaitingDialog;
+import jaddon.icons.IconPlus;
 import jaddon.net.Client;
 import jaddon.net.InputProcessor;
 import jaddon.net.Server;
@@ -38,7 +39,7 @@ import javax.swing.Timer;
 /**
  * This TicTacToe game was programmed in only 1 hour
  * @author Paul Hagedorn
- * @version 12.01.2017
+ * @version 17.01.2017
  */
 public class TicTacToe implements ActionListener, WindowListener {
     
@@ -180,6 +181,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         multiplayer_state = HOST;
         cpu = Field.CLEAR;
         final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for player", "Host");
+        wd.setLoadingIcon(JWaitingDialog.Loading.RINGALT).setLoadingIconSize(JWaitingDialog.SIZESTANDARD);
         Runnable run = new Runnable() {
           
             @Override
@@ -246,6 +248,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         cpu = Field.CLEAR;
         if(host != null && !host.isEmpty()) {
             final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for server", "Join");
+        wd.setLoadingIcon(JWaitingDialog.Loading.RIPPLE).setLoadingIconSize(JWaitingDialog.SIZESTANDARD);
             Runnable run = new Runnable() {
 
                 @Override
