@@ -47,6 +47,7 @@ public class Field extends JButton implements Serializable {
     
     public void reset() {
         setState(CLEAR);
+        setStateSelected(Field.State.NONE);
     }
     
     public Field setState(int state) {

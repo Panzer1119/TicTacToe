@@ -192,7 +192,7 @@ public class TicTacToe implements ActionListener, MouseListener, WindowListener 
         reset();
         multiplayer_state = HOST;
         cpu = Field.CLEAR;
-        final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for player", "Host");
+        final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for player", "Hosting Server");
         wd.setLoadingIcon(JWaitingDialog.Loading.RINGALT).setLoadingIconSize(JWaitingDialog.SIZESTANDARD);
         Runnable run = new Runnable() {
           
@@ -248,7 +248,7 @@ public class TicTacToe implements ActionListener, MouseListener, WindowListener 
     }
     
     private void join() {
-        String host = JOptionPane.showInputDialog(frame, "IP:", "Join", JOptionPane.QUESTION_MESSAGE);
+        String host = JOptionPane.showInputDialog(frame, "IP:", "Join Server", JOptionPane.QUESTION_MESSAGE);
         if(host != null && !host.isEmpty()) {
             join(host);
         }
@@ -259,7 +259,7 @@ public class TicTacToe implements ActionListener, MouseListener, WindowListener 
         multiplayer_state = SLAVE;
         cpu = Field.CLEAR;
         if(host != null && !host.isEmpty()) {
-        final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for server", "Join");
+        final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for server", "Joining Server");
         wd.setLoadingIcon(JWaitingDialog.Loading.RIPPLE).setLoadingIconSize(JWaitingDialog.SIZESTANDARD);
             Runnable run = new Runnable() {
 
@@ -326,11 +326,21 @@ public class TicTacToe implements ActionListener, MouseListener, WindowListener 
                 field.addMouseListener(this);
                 field.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED));
                 field.setBackground(null);
+                field.setStateSelected(Field.State.NONE);
                 frame.add(field);
             }
         }
         setIconImage(((Math.random() >= 0.5) ? Field.O : Field.X));
         reset();
+    }
+    
+    public void resetBorders() {
+        for(Field[] fields_ : fields) {
+            for(Field field : fields_) {
+                fieldExited(field, true);
+                fieldExited(field, false);
+            }
+        }
     }
     
     private void setIconImage(int player) {
@@ -423,6 +433,7 @@ public class TicTacToe implements ActionListener, MouseListener, WindowListener 
         frame.revalidate();
         frame.repaint();
         if(game_finished) {
+            resetBorders();
             String extra = "";
             if(draw) {
                 extra = " Its a draw!";
@@ -767,24 +778,35 @@ public class TicTacToe implements ActionListener, MouseListener, WindowListener 
         Color color = null;
         switch(field.getStateSelected()) {
             case NONE:
-                color = (cpu ? color_cpu : color_player);
+                if(cpu) {
+                    color = color_cpu;
+                    field.setStateSelected(Field.State.SELECTEDBYCPU);
+                } else {
+                    color = color_player;
+                    field.setStateSelected(Field.State.SELECTEDBYPLAYER);
+                }
                 break;
             case SELECTEDBYPLAYER:
                 if(cpu) {
                     color = color_both;
+                    field.setStateSelected(Field.State.SELECTEDBYBOTH);
                 } else {
                     color = color_player;
+                    field.setStateSelected(Field.State.SELECTEDBYPLAYER);
                 }
                 break;
             case SELECTEDBYCPU:
                 if(!cpu) {
                     color = color_both;
+                    field.setStateSelected(Field.State.SELECTEDBYBOTH);
                 } else {
-                    color = color_player;
+                    color = color_cpu;
+                    field.setStateSelected(Field.State.SELECTEDBYCPU);
                 }
                 break;
             case SELECTEDBYBOTH:
                 color = color_both;
+                field.setStateSelected(Field.State.SELECTEDBYBOTH);
                 break;
         }
         field.setBackground(color);
@@ -796,26 +818,33 @@ public class TicTacToe implements ActionListener, MouseListener, WindowListener 
         switch(field.getStateSelected()) {
             case NONE:
                 color = color_none;
+                field.setStateSelected(Field.State.NONE);
                 break;
             case SELECTEDBYPLAYER:
                 if(cpu) {
                     color = color_player;
+                    field.setStateSelected(Field.State.SELECTEDBYPLAYER);
                 } else {
                     color = color_none;
+                    field.setStateSelected(Field.State.NONE);
                 }
                 break;
             case SELECTEDBYCPU:
                 if(!cpu) {
                     color = color_cpu;
+                    field.setStateSelected(Field.State.SELECTEDBYCPU);
                 } else {
                     color = color_none;
+                    field.setStateSelected(Field.State.NONE);
                 }
                 break;
             case SELECTEDBYBOTH:
                 if(cpu) {
                     color = color_player;
+                    field.setStateSelected(Field.State.SELECTEDBYPLAYER);
                 } else {
                     color = color_cpu;
+                    field.setStateSelected(Field.State.SELECTEDBYCPU);
                 }
                 break;
         }
