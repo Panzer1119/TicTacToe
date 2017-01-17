@@ -95,8 +95,8 @@ public class TicTacToe implements ActionListener, WindowListener {
         M2I4.addActionListener(this);
         M2I5.addActionListener(this);
         M2I6.addActionListener(this);
-        M2I1.setAccelerator(KeyStroke.getKeyStroke("ctrl N"));
-        M2I2.setAccelerator(KeyStroke.getKeyStroke("ctrl R"));
+        M2I1.setAccelerator(KeyStroke.getKeyStroke("ctrl R"));
+        M2I2.setAccelerator(KeyStroke.getKeyStroke("ctrl Z"));
         M2I3.setAccelerator(KeyStroke.getKeyStroke("ctrl Y"));
         M1.add(M1I2);
         M1.add(M1I1);
@@ -463,8 +463,8 @@ public class TicTacToe implements ActionListener, WindowListener {
             message.host = Field.X;
             message.slave = Field.O;
         } else {
-            message.host = Field.X;
-            message.slave = Field.O;
+            message.host = Field.O;
+            message.slave = Field.X;
         }
         return message;
     }
