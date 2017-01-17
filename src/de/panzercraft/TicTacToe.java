@@ -6,6 +6,7 @@
 package de.panzercraft;
 
 import de.panzercraft.objects.Field;
+import de.panzercraft.objects.FieldCoordinates;
 import de.panzercraft.objects.Message;
 import de.panzercraft.objects.Move;
 import jaddon.controller.JFrameManager;
@@ -16,10 +17,13 @@ import jaddon.net.Client;
 import jaddon.net.InputProcessor;
 import jaddon.net.Server;
 import jaddon.utils.JUtils;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 import java.net.InetAddress;
@@ -28,6 +32,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import javax.swing.BorderFactory;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -35,18 +40,25 @@ import javax.swing.JOptionPane;
 import javax.swing.JSeparator;
 import javax.swing.KeyStroke;
 import javax.swing.Timer;
+import javax.swing.border.EtchedBorder;
 
 /**
  * This TicTacToe game was programmed in only 1 hour
  * @author Paul Hagedorn
  * @version 17.01.2017
  */
-public class TicTacToe implements ActionListener, WindowListener {
+public class TicTacToe implements ActionListener, MouseListener, WindowListener {
     
     public static final String VERSION = "17.01.2017";
     public static final String PROGRAMNAME = "TicTacToe";
     
     public static final int STANDARDPORT = 4533;
+    
+    
+    private static final Color color_none = null;
+    private static final Color color_player = Color.BLACK;
+    private static final Color color_cpu = Color.RED;
+    private static final Color color_both = Color.BLUE;
     
     public static final int NONE = -1;
     public static final int HOST = 0;
@@ -78,7 +90,7 @@ public class TicTacToe implements ActionListener, WindowListener {
     private final Timer timer = new Timer(100, this);
     private String last_host = null;
     
-    private Server server = new Server(STANDARDPORT);
+    private final Server server = new Server(STANDARDPORT);
     private Client client_logged_in = null;
     private Client client = null;
     
@@ -247,7 +259,7 @@ public class TicTacToe implements ActionListener, WindowListener {
         multiplayer_state = SLAVE;
         cpu = Field.CLEAR;
         if(host != null && !host.isEmpty()) {
-            final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for server", "Join");
+        final JWaitingDialog wd = new JWaitingDialog(frame, "Waiting for server", "Join");
         wd.setLoadingIcon(JWaitingDialog.Loading.RIPPLE).setLoadingIconSize(JWaitingDialog.SIZESTANDARD);
             Runnable run = new Runnable() {
 
@@ -289,6 +301,8 @@ public class TicTacToe implements ActionListener, WindowListener {
         for(Field[] fields_ : fields) {
             for(Field field : fields_) {
                 field.reset();
+                field.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED));
+                field.setBackground(null);
             }
         }
         frame.revalidate();
@@ -306,9 +320,12 @@ public class TicTacToe implements ActionListener, WindowListener {
         server.setInputProcessor(INPUTPROCESSORSERVER);
         for(int i = 0; i < fields.length; i++) {
             for(int z = 0; z < fields[i].length; z++) {
-                Field field = new Field();
+                Field field = new Field(i, z);
                 fields[i][z] = field;
                 field.addActionListener(this);
+                field.addMouseListener(this);
+                field.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED));
+                field.setBackground(null);
                 frame.add(field);
             }
         }
@@ -500,6 +517,16 @@ public class TicTacToe implements ActionListener, WindowListener {
         M2I5.setEnabled(multiplayer_state == NONE);
         M2I6.setEnabled((multiplayer_state == NONE) && (last_host != null && !last_host.isEmpty()));
     }
+    
+    private void sendMultiplayer(Object message) {
+        if(multiplayer_state != NONE) {
+            if(multiplayer_state == HOST) {
+                client_logged_in.send(message);
+            } else if(multiplayer_state == SLAVE) {
+                client.send(message);
+            }
+        }
+    }
 
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -586,7 +613,6 @@ public class TicTacToe implements ActionListener, WindowListener {
 
         @Override
         public void processInput(Object object, Client client, Instant timestamp) {
-            StaticStandard.log(String.format("[SERVER] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
             if(object instanceof Move) {
                 Move move = (Move) object;
                 if(!game_finished) {
@@ -604,6 +630,19 @@ public class TicTacToe implements ActionListener, WindowListener {
                 xturn = false;
                 checkFinish();
                 xturn = true;
+            } else if(object instanceof FieldCoordinates) {
+                FieldCoordinates fieldcoordinates = (FieldCoordinates) object;
+                Field field_temp = fields[fieldcoordinates.getRow()][fieldcoordinates.getCol()];
+                switch(fieldcoordinates.getAction()) {
+                    case ENTERED:
+                        fieldEntered(field_temp, true);
+                        break;
+                    case EXITED:
+                        fieldExited(field_temp, true);
+                        break;
+                }
+            } else {
+                StaticStandard.log(String.format("[SERVER] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
             }
         }
 
@@ -643,8 +682,20 @@ public class TicTacToe implements ActionListener, WindowListener {
                 client.send(message);
                 checkFinish();
                 xturn = true;
+            } else if(object instanceof FieldCoordinates) {
+                FieldCoordinates fieldcoordinates = (FieldCoordinates) object;
+                Field field_temp = fields[fieldcoordinates.getRow()][fieldcoordinates.getCol()];
+                switch(fieldcoordinates.getAction()) {
+                    case ENTERED:
+                        fieldEntered(field_temp, true);
+                        break;
+                    case EXITED:
+                        fieldExited(field_temp, true);
+                        break;
+                }
+            } else {
+                StaticStandard.log(String.format("[CLIENT] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
             }
-            StaticStandard.log(String.format("[CLIENT] [%s]: \"%s\"", LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")), object));
         }
 
         @Override
@@ -663,5 +714,113 @@ public class TicTacToe implements ActionListener, WindowListener {
         }
         
     };
+
+    @Override
+    public void mouseClicked(MouseEvent e) {
+    }
+
+    @Override
+    public void mousePressed(MouseEvent e) {
+    }
+
+    @Override
+    public void mouseReleased(MouseEvent e) {
+    }
+
+    @Override
+    public void mouseEntered(MouseEvent e) {
+        if(e.getSource() instanceof Field) {
+            for(int i = 0; i < fields.length; i++) {
+                for(int z = 0; z < fields[i].length; z++) {
+                    Field field = fields[i][z];
+                    if(e.getSource() == field) {
+                        if(!game_finished) {
+                            fieldEntered(field, false);
+                            sendMultiplayer(new FieldCoordinates(field, FieldCoordinates.Action.ENTERED));
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    public void mouseExited(MouseEvent e) {
+        if(e.getSource() instanceof Field) {
+            for(int i = 0; i < fields.length; i++) {
+                for(int z = 0; z < fields[i].length; z++) {
+                    Field field = fields[i][z];
+                    if(e.getSource() == field) {
+                        if(!game_finished) {
+                            fieldExited(field, false);
+                            sendMultiplayer(new FieldCoordinates(field, FieldCoordinates.Action.EXITED));
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    
+    private void fieldEntered(Field field, boolean cpu) {
+        Color color = null;
+        switch(field.getStateSelected()) {
+            case NONE:
+                color = (cpu ? color_cpu : color_player);
+                break;
+            case SELECTEDBYPLAYER:
+                if(cpu) {
+                    color = color_both;
+                } else {
+                    color = color_player;
+                }
+                break;
+            case SELECTEDBYCPU:
+                if(!cpu) {
+                    color = color_both;
+                } else {
+                    color = color_player;
+                }
+                break;
+            case SELECTEDBYBOTH:
+                color = color_both;
+                break;
+        }
+        field.setBackground(color);
+        field.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.LOWERED));
+    }
+    
+    private void fieldExited(Field field, boolean cpu) {
+        Color color = null;
+        switch(field.getStateSelected()) {
+            case NONE:
+                color = color_none;
+                break;
+            case SELECTEDBYPLAYER:
+                if(cpu) {
+                    color = color_player;
+                } else {
+                    color = color_none;
+                }
+                break;
+            case SELECTEDBYCPU:
+                if(!cpu) {
+                    color = color_cpu;
+                } else {
+                    color = color_none;
+                }
+                break;
+            case SELECTEDBYBOTH:
+                if(cpu) {
+                    color = color_player;
+                } else {
+                    color = color_cpu;
+                }
+                break;
+        }
+        field.setBackground(color);
+        field.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED));
+    }
     
 }
